@@ -1,5 +1,5 @@
 // Offline-Cache für "Mein Tag"
-const CACHE = 'meintag-v2';
+const CACHE = 'meintag-v3';
 const FILES = ['./', './index.html', './icon.png', './manifest.json'];
 
 self.addEventListener('install', e => {

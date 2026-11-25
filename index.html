@@ -113,6 +113,11 @@ main{padding:10px 16px calc(170px + env(safe-area-inset-bottom))}
 
 /* Sheets */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:flex-end;z-index:20}
+#editOv,#listOv{z-index:25}
+.ai{flex:none;display:flex;align-items:center;gap:5px;font-size:13px;font-weight:600;padding:5px 11px;border-radius:999px;
+  background:linear-gradient(135deg,#7d55a8,#3b6fb6);color:#fff}
+.revlist{margin-bottom:16px}
+.revlist .task{min-height:50px}
 .sheet{width:100%;max-height:88vh;overflow:auto;background:var(--bg);border-radius:20px 20px 0 0;padding:10px 18px calc(20px + env(safe-area-inset-bottom))}
 .grab{width:38px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 14px}
 .sheet h2{margin:4px 0 14px;font-size:22px}
@@ -180,6 +185,7 @@ main{padding:10px 16px calc(170px + env(safe-area-inset-bottom))}
   <div class="ctop">
     <button class="target" id="btnTarget"><i></i><span></span> ▾</button>
     <div class="preview" id="preview"></div>
+    <button class="ai" id="btnAI" aria-label="Gedanken mit KI sortieren">✦ Sortieren</button>
   </div>
   <div class="bar">
     <textarea id="input" rows="1" placeholder="Was steht an?" enterkeyhint="done"></textarea>
@@ -189,6 +195,20 @@ main{padding:10px 16px calc(170px + env(safe-area-inset-bottom))}
     <button class="mic" id="btnMic" aria-label="Sprechen">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v5"/></svg>
     </button>
+  </div>
+</div>
+
+<!-- AI review sheet -->
+<div class="overlay hidden" id="revOv">
+  <div class="sheet">
+    <div class="grab"></div>
+    <h2 id="revHead">Von der KI einsortiert</h2>
+    <p id="revInfo" style="color:var(--muted);font-size:14px;margin:-6px 0 12px"></p>
+    <ul class="list revlist" id="revList"></ul>
+    <div class="btns">
+      <button class="btn danger" id="revUndo">Alles verwerfen</button>
+      <button class="btn primary" id="revOk">Passt so</button>
+    </div>
   </div>
 </div>
 
@@ -265,6 +285,26 @@ main{padding:10px 16px calc(170px + env(safe-area-inset-bottom))}
     </ol>
     <p>Dann sagst du: <b>„Hey Siri, auf meine Liste“</b>, Siri fragt nach, und du sagst z. B. „Zuhause: morgen Glühbirnen kaufen“.</p>
     <div class="note hidden" id="standaloneNote"><b>Wichtig:</b> Du hast die App als „Web-App“ auf dem Home-Bildschirm. Siri öffnet aber Safari, und iOS trennt die Daten zwischen beiden. Entferne das Icon und füge es neu hinzu, dabei <b>„Als Web-App öffnen“ ausschalten</b>. Dann landet alles in derselben Liste.</div>
+
+    <h3>✦ Gedanken mit KI sortieren</h3>
+    <p>Du redest frei drauflos, Apple Intelligence auf deinem iPhone macht daraus einzelne Aufgaben, ordnet sie deinen Listen zu (oder legt neue an) und erkennt Termine. Das läuft auf dem Gerät. Einmalig einrichten:</p>
+    <ol>
+      <li>App <b>Kurzbefehle</b> → <b>+</b>.</li>
+      <li>Aktion <b>Text diktieren</b>: Sprache Deutsch, „Diktat beenden“ auf <b>Beim Tippen</b> (dann kannst du in Ruhe überlegen).</li>
+      <li>Aktion <b>Modell verwenden</b>: Modell <b>Auf dem Gerät</b>. Tippe ins Anfrage-Feld, füge den Text unten ein und setze ganz am Ende die Variable <i>Diktierter Text</i> ein.
+        <div class="code" id="aiPrompt" style="white-space:pre-wrap;word-break:normal"></div>
+        <button class="btn small" id="btnCopyPrompt">Anfrage kopieren</button>
+      </li>
+      <li>Aktion <b>URL-Kodierung</b> (suche „kodieren“), Eingabe: <i>Antwort</i>.</li>
+      <li>Aktion <b>URL</b>: diese Adresse einfügen und dahinter <i>URL-kodierter Text</i> anhängen:
+        <div class="code" id="aiUrl"></div>
+        <button class="btn small" id="btnCopyAiUrl">Adresse kopieren</button>
+      </li>
+      <li>Aktion <b>URLs öffnen</b>.</li>
+      <li>Kurzbefehl genau so nennen: <b>Gedanken sortieren</b>.</li>
+    </ol>
+    <p>Starten kannst du ihn mit <b>„Hey Siri, Gedanken sortieren“</b> oder mit dem Knopf <b>✦ Sortieren</b> unten in der App. Danach zeigt dir die App, was die KI einsortiert hat, und du kannst jede Aufgabe antippen und korrigieren.</p>
+    <p style="color:var(--muted);font-size:14px">Tipp: Wenn du neue Listen anlegst, kopiere die Anfrage neu in den Kurzbefehl, damit die KI sie kennt. Sortiert die KI zu ungenau, kannst du im Kurzbefehl statt „Auf dem Gerät“ auch „Private Cloud Compute“ wählen (Apples geschützte Server, braucht Internet).</p>
 
     <h3>Deine Daten</h3>
     <p>Alles liegt nur auf diesem iPhone. Mach ab und zu eine Sicherung (z. B. in iCloud Drive speichern).</p>
@@ -511,6 +551,7 @@ function render() {
   }
   $('#main').innerHTML = html;
   renderTarget();
+  if (!$('#revOv').classList.contains('hidden')) renderReview();
 }
 
 function renderTarget() {
@@ -572,7 +613,7 @@ function row(x, opt) {
   if (x.time) meta.push('<span class="pill">' + esc(x.time) + ' Uhr</span>');
   if (opt.showList) meta.push('<span class="pill lst">' + esc(l.name) + '</span>');
   if (!x.done && x.date && x.origDate && x.origDate < x.date) meta.push('<span class="pill roll">↻ seit ' + esc(fmtShort(x.origDate)) + '</span>');
-  const later = (!x.done && view === 'heute' && x.date === today()) ? '<button class="later" data-act="later">→ Morgen</button>' : '';
+  const later = (!opt.noLater && !x.done && view === 'heute' && x.date === today()) ? '<button class="later" data-act="later">→ Morgen</button>' : '';
   return '<li class="task' + (x.done ? ' done' : '') + '" style="--lc:' + c + '" data-id="' + esc(x.id) + '">' +
     '<button class="chk" data-act="toggle" aria-label="Erledigt"></button>' +
     '<div class="body" data-act="edit"><div class="title">' + esc(x.title) + '</div>' +
@@ -807,10 +848,102 @@ $('#lDel').addEventListener('click', () => {
   save(); closeListEditor(); render(); toast('Liste „' + l.name + '“ gelöscht');
 });
 
+// ---------- AI import ----------
+const AI_SHORTCUT = 'Gedanken sortieren';
+const norm = s => String(s || '').toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]/g, '');
+function aiPrompt() {
+  return 'Du sortierst diktierte Gedanken in Aufgaben. Antworte NUR mit einem JSON-Array, ohne Erklärung und ohne Codeblock.\n' +
+    'Jedes Element: {"titel": "kurze Aufgabe als Stichpunkt, z. B. Dachdecker anrufen", "liste": "Name der passenden Liste", "wann": "Zeitangabe genau wie gesagt, z. B. morgen, Freitag, am 5.12., nächste Woche, um 14 Uhr – oder leer"}\n' +
+    'Vorhandene Listen: ' + state.lists.map(l => l.name).join(', ') + '.\n' +
+    'Nimm eine vorhandene Liste, wenn sie passt. Passt keine, erfinde einen kurzen neuen Listennamen (1–2 Wörter). Was zu keinem Thema gehört, kommt in „' + state.lists[0].name + '“.\n' +
+    'Teile mehrere Gedanken in einzelne Aufgaben auf. Lass Füllwörter weg. Erfinde nichts dazu.\n' +
+    'Text: ';
+}
+function resolveList(name, created) {
+  const n = norm(name);
+  if (!n) return state.lists[0].id;
+  let l = state.lists.find(x => norm(x.name) === n) ||
+          state.lists.find(x => { const m = norm(x.name); return m.length >= 4 && n.length >= 4 && (m.includes(n) || n.includes(m)); });
+  if (l) return l.id;
+  const used = new Set(state.lists.map(x => x.color));
+  const nm = String(name).trim().slice(0, 40);
+  l = { id: uid(), name: nm.charAt(0).toUpperCase() + nm.slice(1), color: COLORS.find(c => !used.has(c)) || COLORS[state.lists.length % COLORS.length] };
+  state.lists.push(l); created.push(l.name);
+  return l.id;
+}
+function extractItems(text) {
+  let t = String(text || '').replace(/```(?:json)?/gi, '').trim();
+  const a = t.indexOf('['), b = t.lastIndexOf(']');
+  let data = null;
+  if (a !== -1 && b > a) { try { data = JSON.parse(t.slice(a, b + 1)); } catch (e) {} }
+  if (!data) { try { data = JSON.parse(t); } catch (e) {} }
+  if (data && !Array.isArray(data) && typeof data === 'object') data = Object.values(data).find(Array.isArray) || [data];
+  return Array.isArray(data) ? data : null;
+}
+let reviewIds = [], reviewCreated = [];
+function importAI(text) {
+  const items = extractItems(text);
+  if (!items || !items.length) {
+    toast('Die KI-Antwort war unverständlich – sie steht jetzt im Eingabefeld.');
+    $('#input').value = String(text || '').slice(0, 500); autosize(); updatePreview();
+    return;
+  }
+  const out = [], created = [];
+  items.forEach((it, i) => {
+    if (!it || typeof it !== 'object') return;
+    const title = String(it.titel || it.title || it.aufgabe || it.task || '').trim();
+    if (!title) return;
+    const listId = resolveList(it.liste || it.list || '', created);
+    const when = String(it.wann || it.datum || it.when || it.date || '').trim();
+    let date = null, time = null;
+    if (when) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(when)) date = when;
+      else { const r = parseInput(when + ' x', null, [], listId); date = r.date; time = r.time; }
+    }
+    if (date && date < today()) date = today();
+    const t = { id: uid(), title: title.charAt(0).toUpperCase() + title.slice(1), date, time, done: false, created: Date.now() + i, origDate: date, listId };
+    state.tasks.push(t); out.push(t);
+  });
+  save();
+  reviewIds = out.map(t => t.id); reviewCreated = created;
+  render();
+  if (out.length) openReview(); else toast('Keine Aufgaben erkannt.');
+}
+function renderReview() {
+  const tasks = reviewIds.map(id => state.tasks.find(t => t.id === id)).filter(Boolean);
+  $('#revHead').textContent = tasks.length === 1 ? '1 Aufgabe einsortiert' : tasks.length + ' Aufgaben einsortiert';
+  $('#revInfo').textContent = (reviewCreated.length ? 'Neu angelegt: ' + reviewCreated.join(', ') + '. ' : '') + 'Antippen zum Ändern.';
+  $('#revList').innerHTML = tasks.map(x => row(x, { showList: true, showDate: true, noLater: true })).join('') ||
+    '<li class="task"><div class="body">Keine Aufgaben mehr.</div></li>';
+}
+function openReview() { renderReview(); $('#revOv').classList.remove('hidden'); }
+function closeReview() { $('#revOv').classList.add('hidden'); reviewIds = []; reviewCreated = []; }
+$('#revList').addEventListener('click', e => {
+  const a = e.target.closest('[data-act]'); if (!a) return;
+  const li = a.closest('.task'); const task = li && state.tasks.find(x => x.id === li.dataset.id);
+  if (!task) return;
+  if (a.dataset.act === 'edit') openEdit(task);
+  else if (a.dataset.act === 'toggle') { task.done = !task.done; task.doneAt = task.done ? Date.now() : null; save(); render(); }
+});
+$('#revOk').addEventListener('click', () => { const n = reviewIds.length; closeReview(); render(); if (n) toast(n + (n === 1 ? ' Aufgabe' : ' Aufgaben') + ' gespeichert'); });
+$('#revUndo').addEventListener('click', () => {
+  const ids = new Set(reviewIds);
+  state.tasks = state.tasks.filter(t => !ids.has(t.id));
+  const names = new Set(reviewCreated);
+  state.lists = state.lists.filter(l => !names.has(l.name) || state.tasks.some(t => t.listId === l.id));
+  save(); closeReview(); render(); toast('Verworfen');
+});
+$('#btnAI').addEventListener('click', () => {
+  location.href = 'shortcuts://run-shortcut?name=' + encodeURIComponent(AI_SHORTCUT);
+  setTimeout(() => { if (!document.hidden) toast('Kurzbefehl „' + AI_SHORTCUT + '“ nicht gefunden? Einrichtung unter ⚙︎.'); }, 2500);
+});
+
 // ---------- settings ----------
 const siriBase = () => location.origin + location.pathname + '?add=';
 $('#btnSettings').addEventListener('click', () => {
   $('#siriUrl').textContent = siriBase();
+  $('#aiPrompt').textContent = aiPrompt();
+  $('#aiUrl').textContent = location.origin + location.pathname + '?import=';
   const standalone = window.navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
   $('#standaloneNote').classList.toggle('hidden', !standalone);
   const open = state.tasks.filter(x => !x.done).length;
@@ -821,6 +954,14 @@ $('#btnCloseSet').addEventListener('click', () => $('#setOv').classList.add('hid
 $('#setOv').addEventListener('click', e => { if (e.target.id === 'setOv') $('#setOv').classList.add('hidden'); });
 $('#btnCopyUrl').addEventListener('click', async () => {
   try { await navigator.clipboard.writeText(siriBase()); toast('Adresse kopiert'); }
+  catch (e) { toast('Kopieren nicht möglich – Text gedrückt halten'); }
+});
+$('#btnCopyPrompt').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(aiPrompt()); toast('Anfrage kopiert'); }
+  catch (e) { toast('Kopieren nicht möglich – Text gedrückt halten'); }
+});
+$('#btnCopyAiUrl').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(location.origin + location.pathname + '?import='); toast('Adresse kopiert'); }
   catch (e) { toast('Kopieren nicht möglich – Text gedrückt halten'); }
 });
 $('#btnExport').addEventListener('click', async () => {
@@ -872,10 +1013,12 @@ setInterval(checkDay, 30000);
 // ---------- start ----------
 load(); save();
 const rolled = rollover();
-const incoming = new URLSearchParams(location.search).get('add');
-if (incoming !== null) { try { history.replaceState(null, '', location.pathname); } catch (e) {} }
+const qs = new URLSearchParams(location.search);
+const incoming = qs.get('add'), aiIn = qs.get('import');
+if (incoming !== null || aiIn !== null) { try { history.replaceState(null, '', location.pathname); } catch (e) {} }
 render();
-if (incoming && incoming.trim()) { const out = addFromText(incoming, today(), state.lists[0].id); render(); addedToast(out); }
+if (aiIn && aiIn.trim()) importAI(aiIn);
+else if (incoming && incoming.trim()) { const out = addFromText(incoming, today(), state.lists[0].id); render(); addedToast(out); }
 else if (rolled) toast(rolled + (rolled === 1 ? ' offene Aufgabe' : ' offene Aufgaben') + ' auf heute übernommen');
 
 try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
